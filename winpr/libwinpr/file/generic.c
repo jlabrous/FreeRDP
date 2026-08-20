@@ -1063,6 +1063,7 @@ static void SetDosAttributesToXAttr(const char* path, DWORD dwFileAttributes)
 	if (fd != -1) {
 		if (ioctl(fd, FAT_IOCTL_SET_ATTRIBUTES, &intAttr) != -1) {
 			close(fd);
+			WLog_INFO(TAG, "Set FAT attribute for %s", path);
 			return;
 		}
 		close(fd);
