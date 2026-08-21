@@ -1109,7 +1109,7 @@ static void SetDosAttributesToXAttr(const char* path, DWORD dwFileAttributes)
 	/* if only ARCHIVE remove attribute */
 	if (intAttr == FILE_ATTRIBUTE_ARCHIVE)
 	{
-		const int rc = removexattr(path, "user.DOSATTRIB");
+		const int rc = winpr_removexattr(path, "user.DOSATTRIB");
 		if (rc != 0)
 		{
 			char buffer[128] = WINPR_C_ARRAY_INIT;
