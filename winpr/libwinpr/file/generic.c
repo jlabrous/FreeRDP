@@ -885,6 +885,32 @@ typedef struct
 } WIN32_FILE_SEARCH;
 
 static const char file_search_magic[] = "file_srch_magic";
+static ssize_t winpr_getxattr(const char* path, const char* name, void* value, size_t size)
+{
+#ifdef __APPLE__
+	return getxattr(path, name, value, size, 0, 0);
+#else
+	return getxattr(path, name, value, size);
+#endif
+}
+
+static int winpr_setxattr(const char* path, const char* name, const void* value, size_t size)
+{
+#ifdef __APPLE__
+	return setxattr(path, name, value, size, 0, 0);
+#else
+	return setxattr(path, name, value, size, 0);
+#endif
+}
+
+static int winpr_removexattr(const char* path, const char* name)
+{
+#ifdef __APPLE__
+	return removexattr(path, name, 0);
+#else
+	return removexattr(path, name);
+#endif
+}
 
 WINPR_ATTR_MALLOC(FindClose, 1)
 static WIN32_FILE_SEARCH* file_search_new(const char* name, size_t namelen, const char* pattern,
@@ -973,10 +999,12 @@ static DWORD GetDosAttributesFromXAttr(const char* path)
 	                            FILE_ATTRIBUTE_ARCHIVE | FILE_ATTRIBUTE_NORMAL;
 
 #if defined(WINPR_HAVE_SYS_XATTR_H)
-	length = getxattr(path, "system.ntfs_attrib_be", &intAttr, sizeof(intAttr));
+	length = winpr_getxattr(path, "system.ntfs_attrib_be", &intAttr, sizeof(intAttr));
 	if (length >= 0)
 	{
+#ifdef __APPLE__
 		intAttr = ntohl(intAttr);
+#endif
 		dwFileAttributes = intAttr;
 	}
 #endif
@@ -984,7 +1012,7 @@ static DWORD GetDosAttributesFromXAttr(const char* path)
 #if defined(WINPR_HAVE_SYS_XATTR_H)
 	if ((dwFileAttributes & supportedMask) == 0)
 	{
-		length = getxattr(path, "user.cifs.dosattrib", &intAttr, sizeof(intAttr));
+		length = winpr_getxattr(path, "user.cifs.dosattrib", &intAttr, sizeof(intAttr));
 		if (length >= 0)
 			dwFileAttributes = intAttr;
 	}
@@ -1007,7 +1035,7 @@ static DWORD GetDosAttributesFromXAttr(const char* path)
 	if ((dwFileAttributes & supportedMask) == 0)
 	{
 		char attrValue[11] = WINPR_C_ARRAY_INIT;
-		length = getxattr(path, "user.DOSATTRIB", attrValue, sizeof(attrValue) - 1);
+		length = winpr_getxattr(path, "user.DOSATTRIB", attrValue, sizeof(attrValue) - 1);
 		if (length >= 0)
 		{
 			attrValue[length] = '\0';
@@ -1043,17 +1071,17 @@ static void SetDosAttributesToXAttr(const char* path, DWORD dwFileAttributes)
 	uint32_t intAttrBE = htonl(intAttr);
 
 #if defined(WINPR_HAVE_SYS_XATTR_H)
-	if (setxattr(path, "system.ntfs_attrib_be", &intAttrBE, sizeof(intAttrBE), 0) >= 0)
+	if (winpr_setxattr(path, "system.ntfs_attrib_be", &intAttrBE, sizeof(intAttrBE)) >= 0)
 	{
 		WLog_INFO(TAG, "Set NTFS attribute xattr for %s", path);
 		return;
 	}
 
 	/* set cifs.dosattrib xattr if it exists, otherwise set user.DOSATTRIB xattr */
-	ssize_t length = getxattr(path, "user.cifs.dosattrib", NULL, 0);
+	ssize_t length = winpr_getxattr(path, "user.cifs.dosattrib", NULL, 0);
 	if (length >= 0)
 	{
-		if (setxattr(path, "user.cifs.dosattrib", &intAttrBE, sizeof(intAttrBE), 0) >= 0)
+		if (winpr_setxattr(path, "user.cifs.dosattrib", &intAttrBE, sizeof(intAttrBE)) >= 0)
 		{
 			WLog_INFO(TAG, "Set CIFS DOS attribute xattr for %s", path);
 			return;
@@ -1082,7 +1110,7 @@ static void SetDosAttributesToXAttr(const char* path, DWORD dwFileAttributes)
 	/* if only ARCHIVE remove attribute */
 	if (intAttr == FILE_ATTRIBUTE_ARCHIVE)
 	{
-		removexattr(path, "user.DOSATTRIB");
+		winpr_removexattr(path, "user.DOSATTRIB");
 		return;
 	}
 
@@ -1091,7 +1119,7 @@ static void SetDosAttributesToXAttr(const char* path, DWORD dwFileAttributes)
 	if (written < 0)
 		return;
 
-	if (setxattr(path, "user.DOSATTRIB", attrValue, strlen(attrValue), 0) < 0)
+	if (winpr_setxattr(path, "user.DOSATTRIB", attrValue, strlen(attrValue)) < 0)
 		WLog_WARN(TAG, "Failed to set DOS attribute xattr for %s", path);
 
 	WLog_INFO(TAG, "Set DOS attribute xattr for %s", path);
